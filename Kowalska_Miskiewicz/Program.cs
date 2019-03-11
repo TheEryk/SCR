@@ -50,10 +50,6 @@ namespace lab2
                 ThreadList.Add(thread);
             }
             Console.WriteLine("Łączę wątki");
-            /*foreach (var thread in ThreadList)
-            {
-                thread.Join();
-            }*/
             while (!AgentList.All(IRRunable => IRRunable.HasFinished.Equals(true)))
             {
                 Console.Write(".");
@@ -61,12 +57,22 @@ namespace lab2
             }
         }
 
-        static void RunFibres()
+        /*static void RunFibres()
         {
             //List<IEnumerator<float>> IEnumList = new List<IEnumerator<float>>();
             foreach (var IRunnable in AgentList)
             {
                 IRunnable.CoroutineUpdate().MoveNext();
+            }
+        }*/
+        static void RunFibres()
+        {
+            foreach (var IRunnable in AgentList)
+            {
+                while(IRunnable.CoroutineUpdate().MoveNext())
+                {
+                }
+                Console.Write(".");
             }
         }
 
@@ -178,7 +184,7 @@ namespace lab2
             Console.WriteLine("Zaczynam");
             GenerateRunnables();
             Console.WriteLine("Wygenerowałem agenty");
-            RunThreads();
+            RunFibres();
             Console.WriteLine("Połączyłem wątki");
             Console.Read();
         }
