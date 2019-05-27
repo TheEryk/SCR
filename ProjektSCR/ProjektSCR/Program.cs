@@ -9,6 +9,8 @@ namespace ProjektSCR
 {
     class Program
     {
+        private static bool Finished = false;
+        private static List<int> ListaSpraw;
         private static List<Okienko> ListaOkienek;
         private static List<Matka> ListaMatek;
         private static SpinLock Biletomat = new SpinLock();
@@ -16,12 +18,11 @@ namespace ProjektSCR
         class Matka
         {
             public enum MozliwyStan { Kolejka, Poczekalnia, Okienko, Wyszla };
-            MozliwyStan stan;
+            public MozliwyStan stan;
             int ID;
             int Numer;
-            int Trudnosc;
+            public int Trudnosc;
             public bool MamSprawe;
-            Okienko okienko;
             public Matka(int powaga, int iD)
             {
                 stan = MozliwyStan.Kolejka;
@@ -38,7 +39,15 @@ namespace ProjektSCR
                     Thread.Sleep(1000);
                 }
             }
-            void Update()
+            public void PostepWSprawie()
+            {
+                Trudnosc--;
+                if(Trudnosc == 0)
+                {
+                    MamSprawe = false;
+                }
+            }
+            public void Update()
             {
                 switch (stan)
                 {
@@ -51,16 +60,27 @@ namespace ProjektSCR
                         Podejdz_Do_Okienka();
                         break;
                     case MozliwyStan.Okienko:
-                        if (!MamSprawe)
+                        if (MamSprawe)
+                        {
+                            Console.WriteLine("Matka " + ID + " jest przy okienku");
+                        }
+                        else
                         {
                             Awansuj();
                         }
                         break;
+
                     case MozliwyStan.Wyszla:
+                        Console.WriteLine("Wyszłam, mam ID: " + ID + " | Zostałam obsłużona z numerem: " + Numer);
                         break;
+
                     default:
                         break;
                 }
+            }
+            public void PelneInfo()
+            {
+                Console.WriteLine("Jestem matka z ID " + ID + " numer " + Numer + " i MamSprawe: " + MamSprawe);
             }
             void Awansuj()
             {
@@ -87,9 +107,8 @@ namespace ProjektSCR
                     {
                         if (lockTaken)
                         {
-                            Numer = ++numerek;
-                            Console.WriteLine("Matka " + ID + " wziela numer " + Numer);
-                            Awansuj();
+                            Numer = numerek++;
+                            ListaSpraw.Add(Numer);
                             Biletomat.Exit();
                         }
                         else
@@ -98,85 +117,149 @@ namespace ProjektSCR
                         }
                     }
                 } while (!lockTaken);
+                Console.WriteLine("Matka " + ID + " wziela numer " + Numer);
+                Awansuj();
             }
             void Podejdz_Do_Okienka()
             {
                 foreach(var okienko in ListaOkienek)
                 {
-                    if (okienko.JakiNumer() == Numer)
+                    if (okienko.ZdobadzWywolanyNumer() == Numer)
                     {
                         okienko.NowaMatka(ID);
                         Awansuj();
                     }
                 }
             }
-            public void Rozwiazana_Sprawa()
-            {
-                MamSprawe = false;
-            }
         }
-
         class Okienko
         {
-            Urzednik urzednik;
+            //Statyczne 
             int NumerOkienka;
-            int WywolanyNumer;
+            public enum Status { Pusty, Oczekuje, Zajety };
+
+            //Status
+            Status status = Status.Pusty;
+
+            //Przed przyjeciem petenta
+            public int WywolanyNumer;
+
+            //Po przyjeciu klienta
             int AktualnyNumer;
             int AktualnaMatkaID;
-            public int JakiNumer()
+
+            public int ZdobadzWywolanyNumer()
+            {
+                return WywolanyNumer;
+            }
+            public int ZdobadzAktualnyNumer()
             {
                 return AktualnyNumer;
             }
+            public int ZdobadzIDMatki()
+            {
+                return AktualnaMatkaID;
+            }
+
+            public Status ZwrocStatus()
+            {
+                return status;
+            }
+            public void ZwolnijOkienko()
+            {
+                status = Status.Pusty;
+            }
             public void NowaMatka(int ID)
             {
+                AktualnyNumer = WywolanyNumer;
                 AktualnaMatkaID = ID;
+                status++;
             }
-            public Okienko(Urzednik urzednik, int NumerOkienka)
+            public void UstawNowyNumer(int NowyNumer)
             {
-                this.urzednik = urzednik;
+                WywolanyNumer = NowyNumer;
+                status++;
+            }
+            public Okienko(int NumerOkienka)
+            {
                 this.NumerOkienka = NumerOkienka;
-                AktualnyNumer = 0;
-            }
-            public void Run()
-            {
-                while (true)
-                {
-                    Update();
-                }
-            }
-            void Update()
-            {
-                if (ListaMatek.ElementAt(AktualnaMatkaID).MamSprawe)
-                {
-                    //Funkcja sprawdzajaca czy urzednik rozwiazal sprawe
-                }
-                else
-                {
-                    AktualnyNumer++;
-                }
             }
         }
         class Urzednik
         {
-            public enum MozliwyStan { Pracuje, Przerwa };
-            public int ID;
+            int ID;
             int czas_przerwy;
-            MozliwyStan stan;
-            public Urzednik(int iD, int przerwa)
+            Okienko okienko;
+            public Urzednik(int iD, int przerwa, Okienko okienko)
             {
-                stan = MozliwyStan.Pracuje;
                 ID = iD;
                 czas_przerwy = przerwa;
+                this.okienko = okienko;
             }
-            public void Przerwa()
+            public void Run()
             {
-                stan = MozliwyStan.Przerwa;
-                Thread.Sleep(czas_przerwy);
-                stan = MozliwyStan.Pracuje;
+                while (!Finished)
+                {
+                    Update();
+                    Thread.Sleep(400);
+                }
             }
             public void Update()
             {
-
+                switch (okienko.ZwrocStatus())
+                {
+                    case Okienko.Status.Pusty:
+                        Console.WriteLine(okienko.ZwrocStatus() + " Przydzielam nowa sprawe");
+                        NowaSprawa();
+                        break;
+                    case Okienko.Status.Oczekuje:
+                        Console.WriteLine(okienko.ZwrocStatus() + " Oczekuje na klienta " + okienko.ZdobadzWywolanyNumer());
+                        break;
+                    case Okienko.Status.Zajety:
+                        if (ListaMatek.ElementAt(okienko.ZdobadzAktualnyNumer()).MamSprawe)
+                        {
+                            ListaMatek.ElementAt(okienko.ZdobadzAktualnyNumer()).PostepWSprawie();
+                            Console.WriteLine("Pracuje z klientem numer: " + okienko.ZdobadzAktualnyNumer() + " | O ID " + okienko.ZdobadzIDMatki() + " | Pozostało " + ListaMatek.ElementAt(okienko.ZdobadzAktualnyNumer()).Trudnosc);
+                        }
+                        else
+                            okienko.ZwolnijOkienko();
+                        break;
+                    default:
+                        break;
+                }
+                foreach (int zmienna in ListaSpraw)
+                {
+                    Console.Write(" " + zmienna + " ");
+                }
+                Console.Write("\n");
+            }
+            public void NowaSprawa()
+            {
+                if (ListaSpraw.Any())
+                {
+                    bool lockTaken = false;
+                    do
+                    {
+                        try
+                        {
+                            Biletomat.TryEnter(ref lockTaken);
+                        }
+                        finally
+                        {
+                            if (lockTaken)
+                            {
+                                okienko.UstawNowyNumer(ListaSpraw.ElementAt(0));
+                                ListaSpraw.RemoveAt(0);
+                                Biletomat.Exit();
+                            }
+                            else
+                            {
+                            }
+                        }
+                    } while (!lockTaken);
+                    Console.WriteLine("Ustawiono nowy numer " + okienko.WywolanyNumer);
+                }
+                else Console.WriteLine("Brak spraw");
             }
         }
         
@@ -185,28 +268,51 @@ namespace ProjektSCR
 
         static void Main(string[] args)
         {
+            
+            ListaSpraw = new List<int>();
             ListaOkienek = new List<Okienko>();
             ListaMatek = new List<Matka>();
-            Urzednik urzednik1 = new Urzednik(1, 10);
-            ListaOkienek.Add(new Okienko(urzednik1, 1));
-            foreach(var okienko in ListaOkienek)
-            {
-                Thread threadOkienko = new Thread(okienko.Run);
-            }
-            int test = 0;
-            for(int i = 0; i <10; i++)
+            List<Thread> watki = new List<Thread>();
+            ListaOkienek.Add(new Okienko(1));
+            Urzednik urzednik = new Urzednik(1, 1, ListaOkienek.Last());
+            Thread watek = new Thread(urzednik.Run);
+            watek.Start();
+            Console.ReadLine();
+            int test = 5;
+            for(int i = 5; i <16; i++)
             {
                 ListaMatek.Add(new Matka(test, i));
             }
-            List<Thread> watki = new List<Thread>();
             foreach(var matka in ListaMatek)
             {
                 Thread thread = new Thread(matka.Run);
                 watki.Add(thread);
                 thread.Start();
             }
+            foreach(Thread thread in watki)
+            {
+                thread.Join();
+            }
+            
             Console.ReadLine();
-
+            for (int i = 12; i < 15; i++)
+            {
+                ListaMatek.Add(new Matka(test, i));
+                Thread thread = new Thread(ListaMatek.Last().Run);
+                watki.Add(thread);
+                thread.Start();
+            }
+            foreach (Thread thread in watki)
+            {
+                thread.Join();
+            }
+            Finished = true;
+            foreach (var matka in ListaMatek)
+            {
+                matka.Update();
+            }
+            
+            Console.ReadLine();
         }
     }
 }
