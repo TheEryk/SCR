@@ -319,6 +319,7 @@ namespace ProjektSCR
             }
             void Podejdz_Do_Okienka()
             {
+                /*
                 foreach(var okienko in ListaOkienek)
                 {
                     if (okienko.ZdobadzWywolanyBilet() == bilet)
@@ -326,6 +327,13 @@ namespace ProjektSCR
                         okienko.Podejdz();
                         Awansuj();
                     }
+                }
+                */
+                if(ListaOkienek.FindIndex(x => x.ZdobadzWywolanyBilet() == bilet) != -1)
+                {
+                    Console.Write("Matka o ID:" + ID + " podeszla do okienka: ");
+                    ListaOkienek.Find(x => x.ZdobadzWywolanyBilet() == bilet).Podejdz();
+                    Awansuj();
                 }
             }
         }
@@ -341,12 +349,13 @@ namespace ProjektSCR
             
             //Przed przyjeciem petenta
             public Bilet WywolanyBilet;
+            int Timeout;
 
             public Okienko(int NumerOkienka)
             {
                 this.NumerOkienka = NumerOkienka;
                 MaUrzednika = false;
-                status = Status.Pusty;
+                ZwolnijOkienko();
                 Console.WriteLine("Utworzone okienko nr:" + NumerOkienka + " o godzinie " + czas.getTime().ToString("T"));
             }
             public void UrzednikPodszedl()
@@ -368,6 +377,7 @@ namespace ProjektSCR
             public void ZwolnijOkienko()
             {
                 status = Status.Pusty;
+                Timeout = 10;
             }
             public Bilet ZdobadzWywolanyBilet()
             {
@@ -379,7 +389,17 @@ namespace ProjektSCR
             }
             public void Podejdz()
             {
+                Console.Write(NumerOkienka + "\n");
                 status++;
+            }
+            public bool Oczekuj()
+            {
+                Timeout--;
+                Console.WriteLine("Okienko numer: " + NumerOkienka + " zmieni za: " + Timeout);
+                if (Timeout == 0)
+                    return true;
+                else
+                    return false;
             }
         }
         class Urzednik
@@ -390,11 +410,18 @@ namespace ProjektSCR
             int czas_przerwy;
             Okienko okienko;
 
-            public Urzednik(int iD, int przerwa)
+            public Urzednik(int iD)
             {
                 ID = iD;
-                czas_przerwy = przerwa;
+                czas_przerwy = 0;
                 kompetencja = Kompetencje.Ogólny;
+                Console.WriteLine("Utworzony urzednik nr:" + ID + " o godzinie " + czas.getTime().ToString("T"));
+            }
+            public Urzednik(int iD, Kompetencje kompetencja)
+            {
+                ID = iD;
+                czas_przerwy = 0;
+                this.kompetencja = kompetencja;
                 Console.WriteLine("Utworzony urzednik nr:" + ID + " o godzinie " + czas.getTime().ToString("T"));
             }
             public void Run()
@@ -417,6 +444,11 @@ namespace ProjektSCR
                             break;
                         case Okienko.Status.Oczekuje:
                             Console.WriteLine(okienko.ZwrocStatus() + " Czekam na petenta");
+                            if (okienko.Oczekuj())
+                            {
+                                okienko.ZwolnijOkienko();
+                                NowaSprawa();
+                            }
                             break;
                         case Okienko.Status.Zajety:
                             if (ListaMatek.ElementAt(okienko.WywolanyBilet.ZwrocNumer()).GdzieJest()==Matka.MozliwyStan.Wyszla)
@@ -461,25 +493,52 @@ namespace ProjektSCR
             }
             public void NowaSprawa()
             {
-                if (ListaSpraw.Any())
+                ListaSprawDostep.WaitOne();
+                int index;
+                switch (kompetencja)
                 {
-                    switch (kompetencja)
-                    {
-                        case Kompetencje.Administracja:
-                            break;
-                        case Kompetencje.Finanse:
-                            break;
-                        default:
-                            ListaSprawDostep.WaitOne();
-                            okienko.UstawWywolanyBilet(ListaSpraw.ElementAt(0));
-                            ListaSpraw.RemoveAt(0);
-                            ListaSprawDostep.ReleaseMutex();
-                            Console.WriteLine("Okienko nr:" + okienko.NumerOkienka + " jest " + okienko.ZwrocStatus() + " Przydzieliłem nowa sprawe "+ okienko.ZdobadzWywolanyBilet() + ", urzednik " + ID);
-                            break;
-                    }
-                    okienko.Podejdz();
+                    case Kompetencje.Administracja:
+                        index = ListaSpraw.FindIndex(x => x.ZwrocKolejke() == 'A');
+                        if ( index != -1)
+                        {
+                            okienko.UstawWywolanyBilet(ListaSpraw.ElementAt(index));
+                            ListaSpraw.RemoveAt(index);
+                            okienko.Podejdz();
+                            Console.WriteLine("Okienko nr:" + okienko.NumerOkienka + " jest " + okienko.ZwrocStatus() + " Przydzieliłem nowa sprawe " + okienko.ZdobadzWywolanyBilet() + ", urzednik " + ID);
+
+                        }
+                        else
+                            Console.WriteLine("Okienko nr:" + okienko.NumerOkienka + " jest " + okienko.ZwrocStatus() + " Brak nowych spraw w kolejce A, urzednik " + ID);
+                        break;
+                    case Kompetencje.Finanse:
+                        index = ListaSpraw.FindIndex(x => x.ZwrocKolejke() == 'F');
+                        if (index != -1)
+                        {
+                            okienko.UstawWywolanyBilet(ListaSpraw.ElementAt(index));
+                            ListaSpraw.RemoveAt(index);
+                            okienko.Podejdz();
+                            Console.WriteLine("Okienko nr:" + okienko.NumerOkienka + " jest " + okienko.ZwrocStatus() + " Przydzieliłem nowa sprawe " + okienko.ZdobadzWywolanyBilet() + ", urzednik " + ID);
+
+                        }
+                        else
+                            Console.WriteLine("Okienko nr:" + okienko.NumerOkienka + " jest " + okienko.ZwrocStatus() + " Brak nowych spraw w kolejce F, urzednik " + ID);
+                        break;
+                    default:
+                        index = ListaSpraw.FindIndex(x => true);
+                        if (index != -1)
+                        {
+                            okienko.UstawWywolanyBilet(ListaSpraw.ElementAt(index));
+                            ListaSpraw.RemoveAt(index);
+                            okienko.Podejdz();
+                            Console.WriteLine("Okienko nr:" + okienko.NumerOkienka + " jest " + okienko.ZwrocStatus() + " Przydzieliłem nowa sprawe " + okienko.ZdobadzWywolanyBilet() + ", urzednik " + ID);
+
+                        }
+                        else
+                            Console.WriteLine("Okienko nr:" + okienko.NumerOkienka + " jest " + okienko.ZwrocStatus() + " Brak nowych spraw, urzednik " + ID);
+                        break;
                 }
-                else Console.WriteLine("Okienko nr:" + okienko.NumerOkienka + " jest " + okienko.ZwrocStatus() +  ", urzednik " + ID + " Brak spraw");
+                ListaSprawDostep.ReleaseMutex();
+
             }
         }
         class Biletomat
@@ -531,15 +590,12 @@ namespace ProjektSCR
                 return bilet;
             }
         }
-
-        
-
         static void Main(string[] args)
         {
 
             Setup();
-            ListaUrzednikow.Add(new Urzednik(1,1));
-            ListaUrzednikow.Add(new Urzednik(2,1));
+            ListaUrzednikow.Add(new Urzednik(1,Urzednik.Kompetencje.Administracja));
+            ListaUrzednikow.Add(new Urzednik(2,Urzednik.Kompetencje.Finanse));
             foreach (Urzednik urzednik in ListaUrzednikow)
             {
                 Thread thread = new Thread(urzednik.Run);
@@ -548,11 +604,13 @@ namespace ProjektSCR
             Console.ReadKey();
             ListaOkienek.Add(new Okienko(1));
             Console.ReadKey();
-            for (int i = 0; i < 15; i++)
-            {
-                Matka matka = (new Matka(i));
+            //for (int i = 0; i < 2; i++)
+            //{
+                Matka matka = (new Matka(1,new Matka.Sprawa(Matka.Sprawa.Typ.Administracja, 5)));
                 ListaWatkow.Add(new Thread(matka.Run));
-            }
+            matka = (new Matka(2, new Matka.Sprawa(Matka.Sprawa.Typ.Finanse, 5)));
+            ListaWatkow.Add(new Thread(matka.Run));
+            //}
             foreach (Thread thread in ListaWatkow)
             {
                 thread.Start();
@@ -564,64 +622,12 @@ namespace ProjektSCR
                 thread.Join();
             }
             Console.ReadKey();
-            foreach (Matka matka in ListaMatek)
+            foreach (Matka matkam in ListaMatek)
             {
-                matka.Update();
+                matkam.Update();
             }
+            SimulationRunning = false;
             Console.ReadKey();
-            //Czas czas = new Czas(new DateTime(2019, 5, 30, 19, 14, 00));
-
-            //czas.Run(500);
-
-            //Console.WriteLine((czas.getTime() - new DateTime(2019, 5, 30, 19, 14, 00)).ToString());
-            //Console.ReadKey();
         }
-        /*{
-            
-            ListaSpraw = new List<int>();
-            ListaOkienek = new List<Okienko>();
-            ListaMatek = new List<Matka>();
-            List<Thread> ListaWatkow = new List<Thread>();
-            ListaOkienek.Add(new Okienko(1));
-            Urzednik urzednik = new Urzednik(1, 1, ListaOkienek.Last());
-            Thread watek = new Thread(urzednik.Run);
-            watek.Start();
-            Console.ReadLine();
-            int test = 5;
-            for(int i = 5; i <16; i++)
-            {
-                ListaMatek.Add(new Matka(test, i));
-            }
-            foreach(var matka in ListaMatek)
-            {
-                Thread thread = new Thread(matka.Run);
-                ListaWatkow.Add(thread);
-                thread.Start();
-            }
-            foreach(Thread thread in ListaWatkow)
-            {
-                thread.Join();
-            }
-            
-            Console.ReadLine();
-            for (int i = 12; i < 15; i++)
-            {
-                ListaMatek.Add(new Matka(test, i));
-                Thread thread = new Thread(ListaMatek.Last().Run);
-                ListaWatkow.Add(thread);
-                thread.Start();
-            }
-            foreach (Thread thread in ListaWatkow)
-            {
-                thread.Join();
-            }
-            Finished = true;
-            foreach (var matka in ListaMatek)
-            {
-                matka.Update();
-            }
-            
-            Console.ReadLine();
-        }*/
     }
 }
