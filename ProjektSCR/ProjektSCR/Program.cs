@@ -594,8 +594,9 @@ namespace ProjektSCR
         {
 
             Setup();
-            ListaUrzednikow.Add(new Urzednik(1,Urzednik.Kompetencje.Administracja));
-            ListaUrzednikow.Add(new Urzednik(2,Urzednik.Kompetencje.Finanse));
+            ListaUrzednikow.Add(new Urzednik(1));
+            ListaUrzednikow.Add(new Urzednik(2));
+            ListaUrzednikow.Add(new Urzednik(3,Urzednik.Kompetencje.Finanse));
             foreach (Urzednik urzednik in ListaUrzednikow)
             {
                 Thread thread = new Thread(urzednik.Run);
@@ -603,14 +604,15 @@ namespace ProjektSCR
             }
             Console.ReadKey();
             ListaOkienek.Add(new Okienko(1));
+            ListaOkienek.Add(new Okienko(3));
             Console.ReadKey();
-            //for (int i = 0; i < 2; i++)
-            //{
-                Matka matka = (new Matka(1,new Matka.Sprawa(Matka.Sprawa.Typ.Administracja, 5)));
+            for (int i = 0; i < 7; i++)
+            {
+                Matka matka = new Matka(i,new Matka.Sprawa(Matka.Sprawa.Typ.Administracja, 5));
                 ListaWatkow.Add(new Thread(matka.Run));
-            matka = (new Matka(2, new Matka.Sprawa(Matka.Sprawa.Typ.Finanse, 5)));
-            ListaWatkow.Add(new Thread(matka.Run));
-            //}
+            }
+            Matka m = new Matka(10, new Matka.Sprawa(Matka.Sprawa.Typ.Finanse, 5));
+            ListaWatkow.Add(new Thread(m.Run));
             foreach (Thread thread in ListaWatkow)
             {
                 thread.Start();
