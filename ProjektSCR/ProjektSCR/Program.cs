@@ -14,7 +14,27 @@ namespace ProjektSCR
     {
         private static Mutex ListaOkienekDostep;
         private static Mutex ListaSprawDostep;
-        static bool SimulationRunning;
+        private static bool SimulationRunning;
+        /// <summary>
+        /// Okresla podstawe czasowa symulacji (1 -> minuta trwa 1ms)
+        /// </summary>
+        private static int TimeBase;
+        /// <summary>
+        /// Godzina rozpoczecia symulacji
+        /// </summary>
+        private static int TimeDayStart;
+        /// <summary>
+        /// Godzina rozpoczecia pracy
+        /// </summary>
+        private static int TimeWorkStart;
+        /// <summary>
+        /// Godzina zakonczenia pracy
+        /// </summary>
+        private static int TimeWorkEnd;
+        /// <summary>
+        /// Godzina zakonczenia symulacji
+        /// </summary>
+        private static int TimeDayEnd;
 
         private struct Bilet
         {
@@ -49,30 +69,42 @@ namespace ProjektSCR
                 return Kolejka + Numer.ToString();
             }
         }
-        static int OstatniNumerek;
-        static List<Bilet> ListaSpraw;
-        static List<Okienko> ListaOkienek;
-        static List<Matka> ListaMatek;
-        static List<Biletomat> ListaBiletomatow;
-        static List<Thread> ListaWatkow;
-        static List<Urzednik> ListaUrzednikow;
-        static Czas czas;
-        static Matka.Sprawa defaultSprawa = new Matka.Sprawa(Matka.Sprawa.Typ.Undefined, 5);
-        static void Setup()
+        private static int OstatniNumerek;
+        private static List<Bilet> ListaSpraw;
+        private static List<Okienko> ListaOkienek;
+        private static List<Matka> ListaMatek;
+        private static List<Biletomat> ListaBiletomatow;
+        private static List<Thread> ListaWatkow;
+        private static List<Urzednik> ListaUrzednikow;
+        private static Czas czas;
+        /// <summary>
+        /// Funkcja inicjalizująca środowisko
+        /// </summary>
+        private static void Setup()
         {
             SimulationRunning = true;
-            czas = new Czas(new DateTime(2019, 5, 30, 19, 14, 00));
+            czas = new Czas(new DateTime(2019, 5, 30, TimeDayStart, 00, 00));
             Thread zegarek = new Thread(czas.Run);
             zegarek.Start();
             ListaSpraw = new List<Bilet>();
             ListaOkienek = new List<Okienko>();
             ListaMatek = new List<Matka>();
             ListaBiletomatow = new List<Biletomat>();
-            ListaBiletomatow.Add(new Biletomat(1, 1500));
             ListaWatkow = new List<Thread>();
             ListaUrzednikow = new List<Urzednik>();
             ListaOkienekDostep = new Mutex();
             ListaSprawDostep = new Mutex();
+        }
+        /// <summary>
+        /// Funkcja ustalająca kluczowe godziny
+        /// </summary>
+        private static void SetupTime()
+        {
+            TimeBase = 100;
+            TimeDayStart = 7;
+            TimeDayEnd = 20;
+            TimeWorkStart = 8;
+            TimeWorkEnd = 16;
         }
         /// <summary>
         /// Funkcja generuje Matke przyjmuje:
@@ -112,7 +144,10 @@ namespace ProjektSCR
                 Name = ((int)args[index]).ToString();
                 args = args.Where((val, idx) => idx != index).ToArray();
             }
-            else Name = "Undefined";
+            else
+            {
+                Name = ListaWatkow.Count.ToString();
+            }
             if (Array.Exists(args, znajdzSprawe))
             {
                 sprawa = (Matka.Sprawa)Array.Find(args, znajdzSprawe);
@@ -136,6 +171,10 @@ namespace ProjektSCR
             ListaWatkow.Add(new Thread(new Matka(Name, sprawa).Run));
             ListaWatkow.Last().Start();
         }
+        /// <summary>
+        /// Funkcja generuje j matek o parametrach domyślnych
+        /// </summary>
+        /// <param name="j"></param>
         private static void GenerujMatki(int j)
         {
             int PierwszyWatek = ListaWatkow.Count;
@@ -147,12 +186,6 @@ namespace ProjektSCR
             {
                 ListaWatkow.ElementAt(PierwszyWatek + i).Start();
             }
-        }
-        private static void GenerujOkienko(int Numer)
-        {
-            ListaOkienekDostep.WaitOne();
-            ListaOkienek.Add(new Okienko(Numer));
-            ListaOkienekDostep.ReleaseMutex();
         }
         /// <summary>
         /// Funkcja generuje Urzednika przyjmuje:
@@ -205,30 +238,34 @@ namespace ProjektSCR
             ListaUrzednikow.Add(new Urzednik(iD, kompetencja, przerwa, Wydajnosc));
             new Thread(ListaUrzednikow.Last().Run).Start();
         }
+        private static void GenerujOkienko()
+        {
+            ListaOkienekDostep.WaitOne();
+            ListaOkienek.Add(new Okienko(ListaOkienek.Count));
+            ListaOkienekDostep.ReleaseMutex();
+        }
+        private static void GenerujBiletomat()
+        {
+            ListaBiletomatow.Add(new Biletomat(ListaBiletomatow.Count, 500));
+        }
         class Czas
         {
             DateTime time;
             public Czas(DateTime datetime)
             {
                 time = datetime;
-                minuta = 1000;
+                minuta = TimeBase;
             }
             int minuta;
             
             public void Run()
             {
-                while(SimulationRunning)
+                while (czas.getTime().Hour < TimeDayEnd) 
                 {
                     Update();
                     Thread.Sleep(minuta);
-                }
-            }
-            public void Run(int okres)
-            {
-                for(int i=0; i<okres; i++)
-                {
-                    Update();
-                    Thread.Sleep(minuta);
+                    if (getTime().Hour >= TimeWorkEnd)
+                        SimulationRunning = false;
                 }
             }
             ///<summary>
@@ -240,6 +277,8 @@ namespace ProjektSCR
             }
             void Update()
             {
+                if (time.Hour != time.AddMinutes(1).Hour)
+                    Console.WriteLine(time.AddMinutes(1));
                 time = time.AddMinutes(1);
             }
             ///<summary>
@@ -249,16 +288,6 @@ namespace ProjektSCR
             {
                 return time;
             }
-            /*  Przykładowe funkcje czasu
-            Czas czas = new Czas(new DateTime(2019, 5, 30, 19, 14, 00));
-
-            czas.Run(500);
-            #if DEBUG
-                    Console.WriteLine(time.ToString());
-            #endif
-            Console.WriteLine((czas.getTime()- new DateTime(2019, 5, 30, 19, 14, 00)).ToString());
-            Console.ReadKey();
-            */
         }
         class Matka
         {
@@ -320,11 +349,12 @@ namespace ProjektSCR
                 while (stan != MozliwyStan.Wyszla)
                 {
                     Update();
-                    Thread.Sleep(1000);
+                    Thread.Sleep(TimeBase);
                 }
             }
             public void Update()
             {
+                
                 switch (stan)
                 {
                     case MozliwyStan.Kolejka:
@@ -350,7 +380,11 @@ namespace ProjektSCR
                         Console.WriteLine("Timestamps: ");
                         Console.WriteLine("Przyszlam o " + spisczasu.CzasPrzyjscia);
                         Thread.Sleep(10);
-                        Console.WriteLine("Otrzymalam numerek o " + spisczasu.CzasOtrzymaniaNumerka);
+                        if (spisczasu.CzasOtrzymaniaNumerka.Day.ToString() != "01")
+                        {
+                            Console.WriteLine("Otrzymalam numerek o " + spisczasu.CzasOtrzymaniaNumerka);
+                        }
+                        else Console.WriteLine("Nie otrzymałam numerka");
                         Thread.Sleep(10);
                         Console.WriteLine("Podeszlam do okienka o " + spisczasu.CzasPodejsciaDoOkienka);
                         Thread.Sleep(10);
@@ -361,6 +395,17 @@ namespace ProjektSCR
 
                     default:
                         break;
+                }
+                if (!SimulationRunning) {
+                    if (stan == MozliwyStan.Kolejka)
+                    {
+                        ListaSprawDostep.WaitOne();
+                        ListaMatek.Add(this);
+                        ListaSprawDostep.ReleaseMutex();
+                        stan = MozliwyStan.Wyszla;
+                    }
+                    else if (stan == MozliwyStan.Poczekalnia)
+                        stan = MozliwyStan.Wyszla;
                 }
             }
             ///<summary>
@@ -495,8 +540,12 @@ namespace ProjektSCR
             public enum Kompetencje { Ogólny, Administracja, Finanse};
             int ID;
             Kompetencje kompetencja;
+            /// <summary>
+            /// Czas przerwy w minutach
+            /// </summary>
             int czas_przerwy;
             int Wydajnosc;
+            bool KoniecPracy;
             Okienko okienko;
             DateTime ostatniaPrzerwa;
             /// <summary>
@@ -507,6 +556,7 @@ namespace ProjektSCR
             /// <param name="przerwa"></param>
             public Urzednik(int iD, Kompetencje kompetencja, int przerwa, int Wydajnosc)
             {
+                KoniecPracy = false;
                 ID = iD;
                 czas_przerwy = przerwa;
                 this.kompetencja = kompetencja;
@@ -515,22 +565,38 @@ namespace ProjektSCR
             }
             public void Run()
             {
-                while (SimulationRunning)
+                while (!KoniecPracy)
                 {
                     Update();
-                    Thread.Sleep(500);
+                    Thread.Sleep(2*TimeBase);
                 }
             }
             public void Update()
             {
+                if (okienko == null)
+                {
+                    if (SimulationRunning)
+                    {
+                        ZnajdzOkienko();
+                    }
+                    else KoniecPracy = true;
+                }
                 if (okienko != null)
                 {
                     switch (okienko.ZwrocStatus())
                     {
                         case Okienko.Status.Pusty:
-                            if (SprawdzPrzerwe(60))
+                            if (SimulationRunning)
                             {
-                                NowaSprawa();
+                                if (SprawdzPrzerwe(60))
+                                {
+                                    NowaSprawa();
+                                }
+                            }
+                            else
+                            {
+                                KoniecPracy = true;
+                                ZwolnijOkienko();
                             }
                             break;
                         case Okienko.Status.Oczekuje:
@@ -541,7 +607,7 @@ namespace ProjektSCR
                             }
                             break;
                         case Okienko.Status.Zajety:
-                            if (ListaMatek.ElementAt(okienko.WywolanyBilet.ZwrocNumer()).GdzieJest()==Matka.MozliwyStan.Wyszla)
+                            if (ListaMatek.ElementAt(okienko.WywolanyBilet.ZwrocNumer()).GdzieJest() == Matka.MozliwyStan.Wyszla)
                             {
                                 okienko.ZwolnijOkienko();
                             }
@@ -554,33 +620,32 @@ namespace ProjektSCR
                             break;
                     }
                 }
-                else ZnajdzOkienko();
             }
             void ZnajdzOkienko()
             {
                 ListaOkienekDostep.WaitOne();
                 Thread.Sleep(500);
-                foreach (var okienko in ListaOkienek)
+                int index = ListaOkienek.FindIndex(x => !x.CzyJestUrzednik());
+                if (index != -1)
                 {
-                    if (this.okienko == null && !okienko.CzyJestUrzednik())
-                    {
-                        this.okienko = okienko;
-                        okienko.UrzednikPodszedl();
-                        Console.WriteLine("Urzednik nr:" + ID +  " znalazlem okienko: " + okienko.NumerOkienka);
-                    }
+                    okienko = ListaOkienek.ElementAt(index);
+                    okienko.UrzednikPodszedl();
+                    Console.WriteLine("Urzednik " + ID + " podszedl do okienka " + okienko.NumerOkienka + " o godzinie " + czas.getTime());
+                    ostatniaPrzerwa = czas.getTime();
                 }
-                ostatniaPrzerwa = czas.getTime();
                 ListaOkienekDostep.ReleaseMutex();
             }
             bool SprawdzPrzerwe(int okres)
             {
-                if(czas_przerwy != 0)
+                if(czas_przerwy > 2)
                 {
+                    if (czas.getTime().Hour < 8)
+                        ostatniaPrzerwa = czas.getTime();
                     TimeSpan span = czas.getTime().Subtract(ostatniaPrzerwa);
                     if (span.TotalMinutes > okres)
                     {
                         ZwolnijOkienko();
-                        Thread.Sleep(czas_przerwy * 1000);
+                        Thread.Sleep((czas_przerwy-2) * TimeBase);
                         return false;
                     }
                 }
@@ -596,6 +661,7 @@ namespace ProjektSCR
             {
                 ListaSprawDostep.WaitOne();
                 int index;
+                bool Flaga = false;
                 switch (kompetencja)
                 {
                     case Kompetencje.Administracja:
@@ -610,7 +676,7 @@ namespace ProjektSCR
                         }
                         else
                         {
-                            SprawdzPrzerwe(15);
+                            Flaga = true;
                         }
                         break;
                     case Kompetencje.Finanse:
@@ -625,7 +691,7 @@ namespace ProjektSCR
                         }
                         else
                         {
-                            SprawdzPrzerwe(15);
+                            Flaga = true;
                         }
                             break;
                     default:
@@ -640,12 +706,13 @@ namespace ProjektSCR
                         }
                         else
                         {
-                            SprawdzPrzerwe(15);
+                            Flaga = true;
                         }
                             break;
                 }
                 ListaSprawDostep.ReleaseMutex();
-
+                if (Flaga)
+                    SprawdzPrzerwe(15);
             }
         }
         class Biletomat
@@ -661,7 +728,11 @@ namespace ProjektSCR
             }
             public bool ZajmijBiletomat()
             {
-                return zajety.WaitOne(10);
+                if (czas.getTime().Hour >= TimeWorkStart && czas.getTime().Hour <TimeWorkEnd)
+                {
+                    return zajety.WaitOne(10);
+                }
+                else return false;
             }
             public Bilet ZdobadzNumer(Matka matka)
             {
@@ -686,36 +757,51 @@ namespace ProjektSCR
                 OstatniNumerek++;
                 ListaMatek.Add(matka);
                 ListaSprawDostep.ReleaseMutex();
-                Thread.Sleep(Opoznienie);
                 zajety.ReleaseMutex();
                 return bilet;
             }
         }
         static void Main(string[] args)
         {
-
+            SetupTime();
             Setup();
-            GenerujOkienko(1);
-            GenerujOkienko(2);
-            GenerujUrzednika(1, 0, 2);
-            GenerujUrzednika(2, Urzednik.Kompetencje.Finanse);
-            GenerujMatke("Anna", new Matka.Sprawa(Matka.Sprawa.Typ.Administracja, 5));
-            Thread.Sleep(1000);
-            GenerujMatke("Beata", new Matka.Sprawa(Matka.Sprawa.Typ.Finanse, 6));
-            Thread.Sleep(1000);
-            GenerujMatke("Celina", 15);
-            foreach (Thread thread in ListaWatkow)
+            GenerujBiletomat();
+            GenerujOkienko();
+            GenerujOkienko();
+            GenerujOkienko();
+            GenerujOkienko();
+            GenerujUrzednika(0, 60, 2);
+            GenerujUrzednika(1, 10, 2);
+            //Generacja urzednikow i matek w trakcie symulacji
+            while (SimulationRunning)
             {
-                thread.Join();
-            }
-            foreach (Matka matkam in ListaMatek)
-            {
-                matkam.Update();
-            }
-            SimulationRunning = false;
+                ConsoleKeyInfo cki;
+                cki = Console.ReadKey();
+                switch (cki.Key.ToString())
+                {
+                    case "A":
+                        GenerujMatke(ListaWatkow.Count, 10);
+                        break;
+                    case "U":
+                        GenerujUrzednika(ListaUrzednikow.Count, 0);
+                        break;
+                    default:
+                        break;
 
+                }
+            }
+            //Polaczenie watkow
+            foreach(Thread watek in ListaWatkow)
+            {
+                watek.Join();
+            }
+            //Spis końcowy
+            foreach (Matka matka in ListaMatek)
+            {
+                matka.Update();
+            }
+            
             Console.ReadKey();
         }
-        
     }
 }
