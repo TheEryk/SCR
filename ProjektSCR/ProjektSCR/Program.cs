@@ -98,13 +98,13 @@ namespace ProjektSCR
         /// <summary>
         /// Funkcja ustalająca kluczowe godziny
         /// </summary>
-        private static void SetupTime()
+        private static void SetupTime(int timeBase, int timeDayStart, int timeDayEnd, int timeWorkStart, int timeWorkEnd)
         {
-            TimeBase = 100;
-            TimeDayStart = 7;
-            TimeDayEnd = 20;
-            TimeWorkStart = 8;
-            TimeWorkEnd = 16;
+            TimeBase = timeBase;
+            TimeDayStart = timeDayStart;
+            TimeDayEnd = timeDayEnd;
+            TimeWorkStart = timeWorkStart;
+            TimeWorkEnd = timeWorkEnd;
         }
         /// <summary>
         /// Funkcja generuje Matke przyjmuje:
@@ -244,9 +244,13 @@ namespace ProjektSCR
             ListaOkienek.Add(new Okienko(ListaOkienek.Count));
             ListaOkienekDostep.ReleaseMutex();
         }
-        private static void GenerujBiletomat()
+        /// <summary>
+        /// Generuje biletomat z opóźnieniem w minutach
+        /// </summary>
+        /// <param name="opoznienie"></param>
+        private static void GenerujBiletomat(int opoznienie)
         {
-            ListaBiletomatow.Add(new Biletomat(ListaBiletomatow.Count, 500));
+            ListaBiletomatow.Add(new Biletomat(ListaBiletomatow.Count, opoznienie));
         }
         class Czas
         {
@@ -340,9 +344,7 @@ namespace ProjektSCR
                 this.Name = Name;
                 this.sprawa = sprawa;
                 spisczasu.CzasPrzyjscia = czas.getTime();
-#if DEBUG
                 Console.WriteLine("Utworzona Matka " + this.Name + " o godzinie " + spisczasu.CzasPrzyjscia.ToString("T") + " ze sprawa " + this.sprawa.Typ_Sprawy + " o trudnosci " + this.sprawa.Trudnosc);
-#endif
             }
             public void Run()
             {
@@ -375,22 +377,24 @@ namespace ProjektSCR
                         break;
 
                     case MozliwyStan.Wyszla:
-#if DEBUG
                         Console.WriteLine("Wyszłam, mam ID: " + Name + " | Zostałam obsłużona z numerem: " + bilet);
                         Console.WriteLine("Timestamps: ");
                         Console.WriteLine("Przyszlam o " + spisczasu.CzasPrzyjscia);
-                        Thread.Sleep(10);
-                        if (spisczasu.CzasOtrzymaniaNumerka.Day.ToString() != "01")
+                        if (spisczasu.CzasOtrzymaniaNumerka.Year != 1)
                         {
                             Console.WriteLine("Otrzymalam numerek o " + spisczasu.CzasOtrzymaniaNumerka);
+                            if (spisczasu.CzasPodejsciaDoOkienka.Year != 1)
+                            {
+                                Console.WriteLine("Podeszłam do okienka o " + spisczasu.CzasPodejsciaDoOkienka);
+                                if (spisczasu.CzasRozwiazaniaSprawy.Year != 1)
+                                {
+                                    Console.WriteLine("Rozwiązałam sprawe o " + spisczasu.CzasRozwiazaniaSprawy);
+                                }
+                                else Console.WriteLine("Nie rozwiązałam sprawy");
+                            }
+                            else Console.WriteLine("Nie podeszłam do okienka");
                         }
                         else Console.WriteLine("Nie otrzymałam numerka");
-                        Thread.Sleep(10);
-                        Console.WriteLine("Podeszlam do okienka o " + spisczasu.CzasPodejsciaDoOkienka);
-                        Thread.Sleep(10);
-                        Console.WriteLine("Rozwiazalam sprawe o " + spisczasu.CzasRozwiazaniaSprawy);
-                        Thread.Sleep(10);
-#endif
                         break;
 
                     default:
@@ -737,7 +741,7 @@ namespace ProjektSCR
             public Bilet ZdobadzNumer(Matka matka)
             {
                 Bilet bilet;
-                Thread.Sleep(Opoznienie);
+                Thread.Sleep(Opoznienie*TimeBase);
                 ListaSprawDostep.WaitOne();
                 switch (matka.ZwrocTyp())
                 {
@@ -763,15 +767,11 @@ namespace ProjektSCR
         }
         static void Main(string[] args)
         {
-            SetupTime();
+            SetupTime(100, 7, 12, 8, 11);
             Setup();
-            GenerujBiletomat();
-            GenerujOkienko();
-            GenerujOkienko();
-            GenerujOkienko();
-            GenerujOkienko();
-            GenerujUrzednika(0, 60, 2);
-            GenerujUrzednika(1, 10, 2);
+            GenerujBiletomat(100);
+            //GenerujUrzednika(0, 60, 2);
+            //GenerujUrzednika(1, 10, 2);
             //Generacja urzednikow i matek w trakcie symulacji
             while (SimulationRunning)
             {
@@ -796,6 +796,7 @@ namespace ProjektSCR
                 watek.Join();
             }
             //Spis końcowy
+            Console.Clear();
             foreach (Matka matka in ListaMatek)
             {
                 matka.Update();
