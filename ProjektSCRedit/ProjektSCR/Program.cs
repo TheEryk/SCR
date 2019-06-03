@@ -40,6 +40,11 @@ namespace ProjektSCR
         {
             char Kolejka;
             int Numer;
+            public Bilet(int test=0)
+            {
+                Kolejka = 'z';
+                Numer = 0;
+            }
             public Bilet(char Kolejka, int Numer)
             {
                 this.Kolejka = Kolejka;
@@ -60,10 +65,12 @@ namespace ProjektSCR
                 else
                     return false;
             }
+            
             public static bool operator !=(Bilet bilet, Bilet bilet2)
             {
                 return !(bilet == bilet2);
             }
+            
             public override string ToString()
             {
                 return Kolejka + Numer.ToString();
@@ -255,12 +262,12 @@ namespace ProjektSCR
         class Czas
         {
             DateTime time;
+            int minuta;
             public Czas(DateTime datetime)
             {
                 time = datetime;
                 minuta = TimeBase;
             }
-            int minuta;
             
             public void Run()
             {
@@ -599,8 +606,8 @@ namespace ProjektSCR
                             }
                             else
                             {
-                                KoniecPracy = true;
                                 ZwolnijOkienko();
+                                KoniecPracy = true;
                             }
                             break;
                         case Okienko.Status.Oczekuje:
@@ -643,7 +650,7 @@ namespace ProjektSCR
             {
                 if(czas_przerwy > 2)
                 {
-                    if (czas.getTime().Hour < 8)
+                    if (czas.getTime().Hour < TimeWorkStart)
                         ostatniaPrzerwa = czas.getTime();
                     TimeSpan span = czas.getTime().Subtract(ostatniaPrzerwa);
                     if (span.TotalMinutes > okres)
@@ -767,33 +774,56 @@ namespace ProjektSCR
         }
         static void Main(string[] args)
         {
-            SetupTime(100, 7, 12, 8, 11);
+            //Deklaracja czasu (czas trwania minuty symulacji w ms, godziny: rozpoczęcia symulacji, zakonczenia symulacji, rozpoczęcia pracy, skończenia pracy)
+            SetupTime(100, 7, 20, 8, 16);
+            //Deklaracja globalnych zmiennych, list i obiektu czasu
             Setup();
-            GenerujBiletomat(100);
-            //GenerujUrzednika(0, 60, 2);
-            //GenerujUrzednika(1, 10, 2);
-            //Generacja urzednikow i matek w trakcie symulacji
-            while (SimulationRunning)
+            //Generuj n biletomatów, biletomat przyjmuje opóźnienie w wydaniu biletu w minutach symuacji
+            int n = 2;
+            for(int i = 0; i<n; i++)
+            {
+                GenerujBiletomat(10);
+            }
+            //Generacja urzednikow, okienek i matek w trakcie symulacji
+            while (czas.getTime().Hour<TimeDayEnd)
             {
                 ConsoleKeyInfo cki;
                 cki = Console.ReadKey(true);
                 switch (cki.Key.ToString())
                 {
                     case "A":
-                        GenerujMatke(ListaWatkow.Count, 10);
+                        GenerujMatke(ListaWatkow.Count, Matka.Sprawa.Typ.Finanse, 10);
+                        break;
+                    case "S":
+                        GenerujMatke(ListaWatkow.Count, Matka.Sprawa.Typ.Administracja, 10);
+                        break;
+                    case "F":
+                        GenerujMatke(ListaWatkow.Count);//Ta matka ma niezdefiniowaną sprawę i tylko urzędnik ogólny może rozwiązać
                         break;
                     case "U":
-                        GenerujUrzednika(ListaUrzednikow.Count, 0);
+                        GenerujUrzednika(ListaUrzednikow.Count, 15, Urzednik.Kompetencje.Finanse);
+                        break;
+                    case "I":
+                        GenerujUrzednika(ListaUrzednikow.Count, 15, Urzednik.Kompetencje.Administracja);
+                        break;
+                    case "Y":
+                        GenerujUrzednika(ListaUrzednikow.Count);//Ten urzędnik nie robi przerwy i rozwiązuje każdą sprawę.
                         break;
                     case "O":
                         GenerujOkienko();
+                        break;
+                    case "M":
+                        GenerujMatki(15);//Generuje 15 matek z niezdefiniowanymi sprawami
+                        break;
+                    case "T":
+                        Console.WriteLine(czas.getTime());
                         break;
                     default:
                         break;
 
                 }
             }
-            //Polaczenie watkow
+            //Polaczenie watkow na wszelki wypadek
             foreach(Thread watek in ListaWatkow)
             {
                 watek.Join();
